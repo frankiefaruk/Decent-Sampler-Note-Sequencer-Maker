@@ -1,0 +1,243 @@
+<html><head><base href="." />
+  <title>Decent Sampler Note Sequencer Maker</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #1a1a1a;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .container {
+      max-width: 800px;
+      width: 100%;
+      padding: 2rem;
+      background-color: #252525;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    }
+    
+    h1 {
+      font-weight: 600;
+      font-size: 2rem;
+      margin: 0 0 2rem 0;
+      color: #f5f5f5;
+      text-align: center;
+    }
+    
+    label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #a0a0a0;
+      margin-bottom: 0.5rem;
+    }
+    
+    textarea, input {
+      width: 100%;
+      padding: 0.8rem;
+      border: 1px solid #404040;
+      border-radius: 8px;
+      background-color: #333;
+      color: #e0e0e0;
+      font-family: 'Consolas', monospace;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+    
+    textarea:focus, input:focus {
+      outline: none;
+      border-color: #646cff;
+      box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.2);
+    }
+    
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+    
+    .buttons {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    button {
+      flex: 1;
+      padding: 0.8rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      background-color: #646cff;
+      color: white;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    button:hover {
+      background-color: #747bff;
+      transform: translateY(-1px);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    #copyButton {
+      background-color: #404040;
+    }
+    
+    #copyButton:hover {
+      background-color: #4a4a4a;
+    }
+    
+    #output {
+      padding: 1rem;
+      background-color: #333;
+      border-radius: 8px;
+      font-family: 'Consolas', monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid #404040;
+      max-height: 300px;
+      overflow-y: auto;
+      transition: opacity 0.2s ease;
+    }
+    
+    #output:empty {
+      opacity: 0.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Decent Sampler Note Sequencer Maker</h1>
+    
+    <label for="inputSequence">Existing Note Sequencer:</label>
+    <textarea id="inputSequence" placeholder="Paste your sequence here"></textarea>
+    
+    <label for="chordProgression">Chord Progression:</label>
+    <input type="text" id="chordProgression" placeholder="Enter chords (e.g., Cm C#m Dm)" />
+    
+    <div class="buttons">
+      <button id="generateButton">Generate Output Note Sequencer</button>
+      <button id="copyButton">Copy Output</button>
+    </div>
+    
+    <div id="output" placeholder="Generated sequences will appear here..."></div>
+  </div>
+
+  <script type="module">
+    function parseNoteSequence(xmlString) {
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+        const sequence = xmlDoc.getElementsByTagName('sequence')[0];
+        const noteElements = sequence.getElementsByTagName('note');
+        
+        const notes = Array.from(noteElements).map(noteEl => ({
+          position: noteEl.getAttribute('position'),
+          velocity: noteEl.getAttribute('velocity'),
+          note: noteEl.getAttribute('note'),
+          length: noteEl.getAttribute('length')
+        }));
+
+        const sequenceAttributes = {
+          length: sequence.getAttribute('length'),
+          rate: sequence.getAttribute('rate')
+        };
+
+        return { notes, sequenceAttributes };
+      } catch (error) {
+        console.error("Error parsing XML:", error);
+        alert("Error parsing XML. Please check the input.");
+        return { notes: [], sequenceAttributes: {} };
+      }
+    }
+
+    function getNoteValue(noteStr) {
+      if (typeof noteStr === 'number') { return noteStr; }
+      return parseInt(noteStr, 10);
+    }
+
+    function generateSequence(baseSequence, chord, chordOffset) {
+      const { notes, sequenceAttributes } = parseNoteSequence(baseSequence);
+      if (!notes || notes.length === 0) {
+        return '';
+      }
+      const adjustedNotes = notes.map(note => {
+        const noteValue = getNoteValue(note.note);
+        const adjustedNote = noteValue + chordOffset;
+        return `<note position="${note.position}" velocity="${note.velocity}" note="${adjustedNote}" length="${note.length}"/>`;
+      }).join('\n    ');
+
+      const name = chord.replace("#", "sharp");
+      return `<sequence name="${name}" length="${sequenceAttributes.length}" rate="${sequenceAttributes.rate}">\n    ${adjustedNotes}\n</sequence>`;
+    }
+
+    function calculateChordOffset(chord) {
+      const rootNoteMap = {
+        "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4,
+        "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8,
+        "A": 9, "A#": 10, "Bb": 10, "B": 11
+      };
+
+      let root = chord;
+      if (chord.includes('m') || chord.includes('dim')) {
+        root = chord.split('m')[0].split('dim')[0];
+      }
+      
+      if (root.length > 1 && (root[1] === '#' || root[1] === 'b')) {
+        root = root.substring(0, 2);
+      } else {
+        root = root[0];
+      }
+
+      return rootNoteMap[root] || 0;
+    }
+
+    function generateOutput() {
+      const inputSequence = document.getElementById('inputSequence').value.trim();
+      const chordProgression = document.getElementById('chordProgression').value.trim();
+      
+      if (!inputSequence || !chordProgression) {
+        alert('Please provide both input sequence and chord progression');
+        return;
+      }
+
+      const chords = chordProgression.split(/\s+/).filter(Boolean);
+      let output = '<noteSequences>\n';
+      
+      chords.forEach(chord => {
+        const chordOffset = calculateChordOffset(chord);
+        output += '  ' + generateSequence(inputSequence, chord, chordOffset) + '\n';
+      });
+      
+      output += '</noteSequences>';
+      document.getElementById('output').textContent = output;
+    }
+
+    document.getElementById('generateButton').addEventListener('click', generateOutput);
+    document.getElementById('copyButton').addEventListener('click', () => {
+      const outputText = document.getElementById('output').textContent;
+      navigator.clipboard.writeText(outputText).then(() => {
+        alert('Output copied to clipboard!');
+      }).catch(err => {
+        console.error('Could not copy text: ', err);
+        alert('Failed to copy text to clipboard.');
+      });
+    });
+  </script>
+</body>
+</html>
